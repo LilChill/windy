@@ -1,0 +1,298 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <title>风场可视化</title>
+
+        <!-- 加载框架 -->
+        <script type="text/javascript" src="js/jquery/jquery-2.1.1.min.js"></script>
+        <link href="js/colorpicker/css/colorpicker.css" rel="stylesheet" />
+        <script src="js/colorpicker/colorpicker.js"></script>
+        <script type="text/javascript" src="js/layui/layui.all.js"></script>
+        <link rel="stylesheet" href="js/layui/css/layui.css"  media="all">
+        <script type="text/javascript" src="js/layer3.0/layer.js"></script>
+        <script src="http://www.yanhuangxueyuan.com/versions/threejsR92/build/three.js"></script>
+        <script src="http://www.yanhuangxueyuan.com/threejs/examples/js/controls/OrbitControls.js"></script>
+        <!-- 风向图js -->
+        <script src="js/Windy.js"></script>
+        <link rel="stylesheet" href="css/style.css">
+        <script type="text/javascript">
+            /******
+            ***创建风场就是第38-50行，其他都是业务逻辑
+            ******/
+            var windy = null,
+                windycanvas=null;
+            $(function(){
+                //初始化canvas的长宽
+                windycanvas = document.getElementById("windycanvas");
+                //加载风场数据
+                $.ajax({
+                    type: "get",
+                    url: "data/data.json",
+                    dataType: "json",
+                    success: function (response) {
+                        resizeCanvas();
+                        window.onresize=resizeCanvas;
+                        //风场的参数配置，除了canvas是必传项，其他可以不传，参数含义见windy.js，以下配置了所有参数
+                        var params = {
+                            //extent:[73.6666,135.0416,3.86666,53.55],//中国范围
+                            // extent:[100,115,30,39],
+                            canvas:windycanvas,
+                            canvasWidth:window.innerWidth,
+                            canvasHeight:window.innerHeight,
+                            speedRate:0.01,
+                            particlesNumber:10000,
+                            maxAge:120,
+                            frameRate:10,
+                            color:'#e0761a',
+                            lineWidth:2,
+                        };
+                        windy = new CanvasWindy(response, params);
+                    },
+                    error: function (errorMsg) {
+                        console.log("请求数据失败!");
+                    }
+                });
+
+
+
+                var canrefresh = -1,canrefresh2 = -1;//拖动粒子个数和存活时间滑块时，不能随时刷新，需要隔一段时间刷新，避免卡顿
+                layui.use('slider', function(){
+                    var slider = layui.slider;
+                    slider.render({
+                        elem: '#windy_count',
+                        min:100,
+                        max:100000,
+                        value:12000,
+                        tips:false,
+                        input:true,
+                        theme:'#3b86ca',
+                        change: function(value){
+                            if(windy){
+                                clearTimeout(canrefresh);
+                                windy.particlesNumber = value;
+                                canrefresh = setTimeout(function(){
+                                    windy.redraw();
+                                },500);
+                            }
+                        }
+                    });
+                });
+                layui.use('slider', function(){
+                    var slider = layui.slider;
+                    slider.render({
+                        elem: '#windy_linewidth',
+                        min:1,
+                        max:10,
+                        value:1,
+                        tips:false,
+                        input:true,
+                        theme:'#3b86ca',
+                        change: function(value){
+                            if(windy){
+                                windy.lineWidth = value;
+                            }
+                        }
+                    });
+                });
+                layui.use('slider', function(){
+                    var slider = layui.slider;
+                    slider.render({
+                        elem: '#windy_speed',
+                        min:1,
+                        max:100,
+                        value:1,
+                        tips:false,
+                        input:true,
+                        theme:'#3b86ca',
+                        change: function(value){
+                            if(windy){
+                                windy.speedRate = value/100;
+                            }
+                        }
+                    });
+                });
+                layui.use('slider', function(){
+                    var slider = layui.slider;
+                    slider.render({
+                        elem: '#windy_age',
+                        min:10,
+                        max:500,
+                        value:120,
+                        tips:false,
+                        input:true,
+                        theme:'#3b86ca',
+                        change: function(value){
+                            if(windy){
+                                clearTimeout(canrefresh2);
+                                windy.maxAge = value;
+                                canrefresh2 = setTimeout(function(){
+                                    windy.redraw();
+                                },500);
+                            }
+                        }
+                    });
+                });
+                // 颜色选择插件初始化
+                $('.windycanvas_picker').each(function(inx,dom){
+                    $(dom).ColorPicker({
+                        color: $(dom).val(),
+                        pickerDom:$(dom),
+                        pickerDomInx:0,
+                        onShow: function (colpkr) {
+                            $(colpkr).fadeIn(300);
+                            return false;
+                        },
+                        onHide: function (colpkr) {
+                            $(colpkr).fadeOut(300);
+                            return false;
+                        },
+                        //onchange方法改过，pickerdom,inx是新增的属性
+                        //pickerdom：当前点击节点，inx就是pickerDomInx属性，跟for循环中i相同，用来更新颜色之后同步修改颜色数组
+                        onChange: function (hsb, hex, rgb,pickerdom,inx) {
+                            var colorvl = '#' + hex;
+                            $(pickerdom).val(colorvl);
+                            $(pickerdom).next().css({ "background-color":  colorvl});
+                            if(windy){
+                                windy.color = colorvl;
+                            }
+                        }
+                    });
+                });
+
+                //范围切换
+                $('.extentWindy').on('click',function(){
+                    var dtype = $(this).attr('data-type');
+                    if(dtype=='world'){
+                        windy.extent = [];
+                        console.log(windy.extent)
+                    }else{
+                        windy.extent = [100,115,30,39];//[100,115,30,39];[73.6666,135.0416,3.86666,53.55]
+                        console.log(windy.extent)
+                    }
+                    windy.redraw();
+                });
+
+                //canvas尺寸改变
+                $('.resizeSize').on('click',function(){
+                    var dtype = $(this).attr('data-type');
+                    if(dtype=='1'){
+                        windy.canvasWidth = window.innerWidth;
+                        windy.canvasHeight = window.innerHeight;
+                    }else if(dtype=='2'){
+                        windy.canvasWidth = 1000;
+                        windy.canvasHeight = 600;
+                    }else{
+                        windy.canvasWidth = fRandomBy(500,window.innerWidth);
+                        windy.canvasHeight = fRandomBy(300,window.innerHeight);
+                    }
+                    windy.redraw();
+                });
+            });
+            function resizeCanvas(){
+                windycanvas.width=window.innerWidth;
+                windycanvas.height=window.innerHeight;
+                if(windy){
+                    windy._resize(windycanvas.width,windycanvas.height);
+                }
+            }
+
+            //随机数生成器（整数）
+            function fRandomBy(under, over){
+               switch(arguments.length){
+                 case 1: return parseInt(Math.random()*under+1);
+                 case 2: return parseInt(Math.random()*(over-under+1) + under);
+                 default: return 0;
+               }
+            }
+
+            //网页FPS监控--------不需要去掉就行了
+            var showFPS = (function () {
+                //requestAnimationFrame 函数兼容设计
+                var requestAnimationFrame =
+                    window.requestAnimationFrame || //Chromium
+                    window.webkitRequestAnimationFrame || //Webkit
+                    window.mozRequestAnimationFrame || //Mozilla Geko
+                    window.oRequestAnimationFrame || //Opera Presto
+                    window.msRequestAnimationFrame || //IE Trident?
+                    function (callback) { //Fallback function
+                        window.setTimeout(callback, 1000 / 60);
+                    };
+
+                var fps = 0,offset;
+                var lastTime = Date.now();
+                function calcFPS() {
+                    offset = Date.now() - lastTime;
+                    fps += 1;
+                    if (offset >= 1000) {
+                        lastTime += offset;
+                        displayFPS(fps);
+                        fps = 0;
+                    }
+                    requestAnimationFrame(calcFPS);
+                };
+                function displayFPS(fps) {
+                    if(fps>60){
+                        fps = 60;
+                    }
+                    var fpsStr = fps + ' FPS';
+                    $('#fpsdiv').html(fpsStr);
+                }
+                return function () {
+                    calcFPS();
+                };
+            })();
+            showFPS();
+        </script>
+    </head>
+
+    <body style="overflow:hidden">
+        <div style='position:absolute;width:100%;height:100%;background:#000;'>
+            <canvas id='windycanvas'></canvas>
+        </div>
+        <div id='fpsdiv'>FPS获取中</div>
+
+        <div id='paramsDiv'>
+            <div class='windycanvas_row'>
+                <div class='name'>粒子个数：</div>
+                <div class='slidercont'>
+                    <div id='windy_count' class='sliderbaritem'></div>
+                </div>
+            </div>
+            <div class='windycanvas_row'>
+                <div class='name'>线宽度：</div>
+                <div class='slidercont'>
+                    <div id='windy_linewidth' class='sliderbaritem'></div>
+                </div>
+            </div>
+            <div class='windycanvas_row'>
+                <div class='name'>移动速率：</div>
+                <div class='slidercont'>
+                    <div id='windy_speed' class='sliderbaritem'></div>
+                </div>
+            </div>
+            <div class='windycanvas_row'>
+                <div class='name'>存活时间：</div>
+                <div class='slidercont'>
+                    <div id='windy_age' class='sliderbaritem'></div>
+                </div>
+            </div>
+            <div class='windycanvas_row'>
+                <div class='windycanvas_formcont'>
+                    <span class='windycanvas_span'>颜色：</span>
+                    <input id="point_color" value="#ebb14c" class="windycanvas_formitem windycanvas_picker" readonly>
+                    <div class='windycanvas_colorpanelbg' style='background-color:#ebb14c'></div>
+                </div>
+            </div>
+            <div class='windycanvas_row'>
+                <div class='extentWindy' data-type='world'>世界范围</div>
+                <div class='extentWindy' data-type='china'>中国范围</div>
+            </div>
+            <div class='windycanvas_row'>
+                <div class='resizeSize' data-type='1'>全屏</div>
+                <div class='resizeSize' data-type='2'>1000*600</div>
+                <div class='resizeSize' data-type='3'>随机尺寸</div>
+            </div>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            /* 隐藏body窗口区域滚动条 */
+        }
+        div#canvas-frame {
+            /*position:absolute;width:100%;height:100%;*/
+        }
+    </style>
+    <script src="js/windy3D.js"></script>
+    <script type="text/javascript" src="js/jquery/jquery-2.1.1.min.js"></script>
+    <link href="js/colorpicker/css/colorpicker.css" rel="stylesheet" />
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/colorpicker/colorpicker.js"></script>
+    <script type="text/javascript" src="js/layui/layui.all.js"></script>
+    <link rel="stylesheet" href="js/layui/css/layui.css"  media="all">
+    <script type="text/javascript" src="js/layer3.0/layer.js"></script>
+    <script src="http://www.yanhuangxueyuan.com/versions/threejsR92/build/three.js"></script>
+    <script src="http://www.yanhuangxueyuan.com/threejs/examples/js/controls/OrbitControls.js"></script>
+    <script src="http://www.yanhuangxueyuan.com/threejs/examples/js/lines/LineSegments2.js"></script>
+
+    <script type="text/javascript">
+
+        $(function(){
+            var testObj=null;
+            var grid=null;
+            $.ajax({
+                type: "get",
+                url: "data/data3D.json",
+                dataType: "json",
+                success: function (response) {
+                    testObj = new ThreeJs(response);
+                },
+                error: function (errorMsg) {
+                    console.log("请求数据失败!");
+                }
+            });
+        })
+        //网页FPS监控--------不需要去掉就行了
+        var showFPS = (function () {
+            //requestAnimationFrame 函数兼容设计
+            var requestAnimationFrame =
+                window.requestAnimationFrame || //Chromium
+                window.webkitRequestAnimationFrame || //Webkit
+                window.mozRequestAnimationFrame || //Mozilla Geko
+                window.oRequestAnimationFrame || //Opera Presto
+                window.msRequestAnimationFrame || //IE Trident?
+                function (callback) { //Fallback function
+                    window.setTimeout(callback, 1000 / 60);
+                };
+
+            var fps = 0,offset;
+            var lastTime = Date.now();
+            function calcFPS() {
+                offset = Date.now() - lastTime;
+                fps += 1;
+                if (offset >= 1000) {
+                    lastTime += offset;
+                    displayFPS(fps);
+                    fps = 0;
+                }
+                requestAnimationFrame(calcFPS);
+            };
+            function displayFPS(fps) {
+                if(fps>60){
+                    fps = 60;
+                }
+                var fpsStr = fps + ' FPS';
+                $('#fpsdiv').html(fpsStr);
+            }
+            return function () {
+                calcFPS();
+            };
+        })();
+        showFPS();
+    </script>
+</head>
+<body>
+    <div id="canvas-frame"></div>
+    <div id='fpsdiv'>FPS获取中</div>
+    <script id="vertexShader" type="x-shader/x-vertex">
+        varying vec2 vUv;
+        uniform float u_time;
+        varying float opacity;
+        uniform float max_age;
+        void main()
+        {
+            vUv = uv;
+            vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
+            opacity = 1.0-u_time/max_age<0.0?0.0:(1.0-u_time/max_age);
+            gl_Position = projectionMatrix * mvPosition;
+        }
+      </script>
+    <script id="fragmentShader" type="x-shader/x-fragment">
+                #ifdef GL_ES
+        precision mediump float;
+        #endif
+
+        varying float opacity;
+        uniform vec3 color;
+
+        void main(){
+            if(opacity <=0.2){
+                discard;
+            }
+            gl_FragColor = vec4(color,1.0);
+        }
+      </script>
+</body>
+</html>

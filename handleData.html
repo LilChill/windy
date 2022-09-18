@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script type="text/javascript" src="js/jquery/jquery-2.1.1.min.js"></script>
+    <script  src="https://cdn.bootcss.com/FileSaver.js/2014-11-29/FileSaver.js"></script>
+    <script type="text/javascript">
+        function successFunction(data_csv){
+            var json=[];
+            var allRows = data_csv.split(/\r?\n|\r/);
+            var illustration=allRows[0];
+            var infoRowCell=allRows[2].split(',');
+            infoRowCell.forEach(function(item,index,arr) {
+                arr[index]=parseFloat(item);
+            })
+            var ny=27;
+            var data=[];
+
+            var n=0;
+            var entity={};
+            var current;
+            var h=50;
+            for (var singleRow = 3; singleRow < allRows.length; singleRow++,n++) {
+                current=allRows[singleRow].split(',');
+                for(var i=1;i<current.length;i++){
+                    data.push(current[i]);
+                }
+                if((n+1)%ny===0){
+                    // header.height=current[0];
+                    entity={
+                        header:{
+                            nx:39,
+                            ny:27,
+                            nz:29,
+                            la1: infoRowCell[0],la2: infoRowCell[1],
+                            lb1: infoRowCell[3],lb2: infoRowCell[4],
+                            dx:infoRowCell[2],
+                            dy:infoRowCell[5],
+                            dz:50,
+                            baseHeight:infoRowCell[6],
+                            height:h,
+                        },
+                        data:data
+                    };
+                    h+=50;
+                    json.push(entity);
+                    console.log("height:"+entity.header.height)
+                    data=[];
+                }
+            }
+            console.log(json)
+            var content=JSON.stringify(json);
+            var blob = new Blob([content], {type: "text/plain;charset=utf-8"});
+            saveAs(blob, "data3D.json");
+            return json;
+        }
+        function _parseWindJson(data_json) {
+            var header = null,
+                component=[];
+
+
+            data_json.forEach(function (record) {
+                header=record.header;
+                var data = record['data'];
+                var speed=[],
+                    angel=[];
+                for(var i=0;i<data.length;i++){
+                    var temp=data[i].split("/");
+                    speed.push(parseFloat(temp[0]));
+                    angel.push(parseFloat(temp[1]));
+                }
+                component.push({
+                    height: record.header.height,
+                    speed:speed,
+                    angel:angel
+                });
+            });
+            console.log(header)
+            return {
+                header: header,
+                component:component
+            };
+        }
+        $(function (){
+            $.ajax({
+                type:"get",
+                url:"data/griddata_.csv",
+                dataType:"text"
+            }).done(successFunction);
+            // $.ajax({
+            //     type:"get",
+            //     url:"data/data3D.json",
+            //     dataType:"json"
+            // }).done(_parseWindJson);
+
+        });
+    </script>
+</head>
+<body>
+
+</body>
+</html>
